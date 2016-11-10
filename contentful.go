@@ -9,6 +9,7 @@ import (
 )
 
 const baseUrl string = "https://cdn.contentful.com/"
+const baseImgURL string = "https://images.contentful.com/"
 
 type Contentful struct {
 	spaceId, accessToken string
@@ -40,6 +41,20 @@ func (c Contentful) GetEntry(entryId string, query map[string]string) (entry Ent
 	}
 	return e, nil
 }
+
+func (c Contentful) GetImages(spaceId string, query map[string]string) (entry Entry, err error) {
+	e := Entry{}
+	reader, err := c.performeImgRequest("GET", spaceId+"/", query)
+	if err != nil {
+		return e, err
+	}
+	body, err := ioutil.ReadAll(reader)
+	if err := json.Unmarshal(body, &e); err != nil {
+		return e, fmt.Errorf("error while decoding the json response %v", err)
+	}
+	return e, nil
+}
+
 
 // Gets a collection of entries
 // Example:
@@ -142,3 +157,30 @@ func (c Contentful) performeRequest(method, path string, query map[string]string
 
 	return resp.Body, nil
 }
+
+func (c Contentful) makeImgRequest(method, path string) (request *http.Request, err error) {
+	req, err := http.NewRequest(method, baseImgUrl+"/"+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: ", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Content-Type", "application/vnd.contentful.delivery.v1+json")
+	req.Header.Set("X-Contentful-User-Agent", "contentful.go/1.0")
+	return req, nil
+}
+func (c Contentful) performeImgRequest(method, path string, query map[string]string) (reader io.Reader, err error) {
+	req, err := c.makeRequest(method, path)
+	if query != nil && len(query) > 0 {
+		q := req.URL.Query()
+		for k, v := range query {
+			q.Add(k, v)
+		}
+		req.URL.RawQuery = q.Encode()
+	}
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("performing request %v", err)
+	}
